@@ -6,6 +6,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODULE_NAME="UserProfile"
 PACKAGE_DIR="$SCRIPT_DIR/libraries/business/UserProfile"
 
+PRINT_ONLY="--print-only"
+if [ "${1:-}" = "--write" ]; then
+    PRINT_ONLY=""
+    echo "Running in WRITE mode - files will be created and modified."
+    echo ""
+fi
+
 echo "=== Step 1: Build the generateInterface tool ==="
 cd "$REPO_ROOT"
 swift build -c debug 2>&1 | tail -1
@@ -50,7 +57,7 @@ echo "Compiler arguments written to: $ARGS_FILE"
 echo "$(wc -l < "$ARGS_FILE" | tr -d ' ') arguments extracted."
 
 echo ""
-echo "=== Step 4: Run generateInterface with --print-only ==="
+echo "=== Step 4: Run generateInterface${PRINT_ONLY:+ (dry run)} ==="
 
 # SourceKit requires the Xcode toolchain frameworks to be in the dynamic library path
 TOOLCHAIN_LIB="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
@@ -61,7 +68,7 @@ export DYLD_FRAMEWORK_PATH="$TOOLCHAIN_LIB:${DYLD_FRAMEWORK_PATH:-}"
     "$MODULE_NAME" \
     "$SCRIPT_DIR/libraries" \
     "$ARGS_FILE" \
-    --print-only
+    $PRINT_ONLY
 
 # Clean up
 rm -f "$ARGS_FILE"

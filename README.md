@@ -39,14 +39,30 @@ make build
 
 ## Try it out
 
-A sample project is included to test the tool end-to-end without needing a real Xcode workspace or Tuist:
+A sample project is included to test the tool without needing a real Xcode workspace or Tuist:
 
 ```bash
 cd SampleProject
+
+# Preview the generated interface (dry run, no files written)
 ./run-sample.sh
+
+# Run the full pipeline (creates interface module, rewrites Project.swift and imports)
+./run-sample.sh --write
 ```
 
-This builds the tool, compiles a sample Swift module via SPM, extracts compiler arguments, and runs the tool with `--print-only` to display the generated interface.
+The script builds the tool, compiles a sample Swift module via SPM, extracts compiler arguments, and runs the tool. Use `--write` to execute the full pipeline, or omit it to preview with `--print-only`.
+
+After running with `--write`, you'll see:
+- `libraries/business/UserProfileInterface/` created with `Sources/` and `TestSupport/`
+- `Project.swift` updated with the new interface module declaration
+
+To reset the sample project after a full run:
+
+```bash
+git checkout SampleProject/Project.swift
+rm -rf SampleProject/libraries/business/UserProfileInterface
+```
 
 ## Usage
 
