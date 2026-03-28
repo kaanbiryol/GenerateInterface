@@ -37,11 +37,25 @@ swift build -c release
 make build
 ```
 
+## Try it out
+
+A sample project is included to test the tool end-to-end without needing a real Xcode workspace or Tuist:
+
+```bash
+cd SampleProject
+./run-sample.sh
+```
+
+This builds the tool, compiles a sample Swift module via SPM, extracts compiler arguments, and runs the tool with `--print-only` to display the generated interface.
+
 ## Usage
 
 ### Direct invocation
 
 ```bash
+# SourceKit requires the Xcode toolchain frameworks in the dynamic library path
+export DYLD_FRAMEWORK_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+
 ./generateInterface \
     "/path/to/Project.swift" \
     "MyModule" \
@@ -57,6 +71,46 @@ make build
 
 **Flags:**
 - `--print-only` - preview the generated interface without writing any files
+
+### Getting compiler arguments
+
+The tool needs Swift compiler arguments to invoke SourceKit. You can extract these from Xcode's build settings:
+
+```bash
+# Dump build settings as JSON
+xcodebuild -workspace App.xcworkspace \
+    -scheme "MyModule" \
+    -arch arm64 \
+    -sdk iphonesimulator \
+    -configuration "Debug" \
+    -showBuildSettingsForIndex -json 2>/dev/null > build_settings.json
+```
+
+The JSON output is keyed by module name, then by source file path. Each entry contains a `swiftASTCommandArguments` array. Extract those arguments, remove `-module-name` and the module name itself, and write one argument per line to a file:
+
+```bash
+# Using jq as an example (the Ruby wrapper does this automatically)
+jq -r '
+  .MyModule | to_entries[0].value.swiftASTCommandArguments[]
+' build_settings.json \
+  | grep -v -e '-module-name' -e '^MyModule$' \
+  > compiler-args.txt
+```
+
+### Verifying it works
+
+Use `--print-only` to preview the generated interface without writing any files:
+
+```bash
+./generateInterface \
+    "/path/to/Project.swift" \
+    "MyModule" \
+    "/path/to/modules" \
+    "/path/to/compiler-args.txt" \
+    --print-only
+```
+
+This prints the rewritten module interface to stdout so you can inspect it before committing to file changes.
 
 ### With the Ruby wrapper
 
