@@ -17,7 +17,7 @@ Given a module name and its compiler arguments, the tool:
 1. **Extracts the module interface** via SourceKit (the same engine Xcode uses for code completion and indexing)
 2. **Rewrites the interface** using SwiftSyntax - strips private/internal imports (prefixed with `_`), removes `some`/`any` type erasure wrappers, simplifies member type syntax, filters out builder classes, and merges duplicate extensions
 3. **Replaces declarations** with their original source versions when available (preserving doc comments, attributes, and formatting)
-4. **Creates the interface module directory** with `Sources/` and `TestSupport/` folders
+4. **Creates the interface module directory** with a `Sources/` folder
 5. **Rewrites import statements** across the codebase (`import Module` -> `import ModuleInterface`)
 6. **Updates Project.swift** to register the new interface module with the correct dependencies (Tuist-specific)
 
@@ -54,7 +54,7 @@ cd SampleProject
 The script builds the tool, compiles a sample Swift module via SPM, extracts compiler arguments, and runs the tool. Use `--write` to execute the full pipeline, or omit it to preview with `--print-only`.
 
 After running with `--write`, you'll see:
-- `libraries/business/UserProfileInterface/` created with `Sources/` and `TestSupport/`
+- `libraries/business/UserProfileInterface/` created with `Sources/`
 - `Project.swift` updated with the new interface module declaration
 
 To reset the sample project after a full run:

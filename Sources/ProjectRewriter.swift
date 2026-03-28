@@ -129,7 +129,7 @@ private class ProjectRewriter: SyntaxRewriter {
                         featuresArray.elements.filter { element in
                             if let functionCall = element.expression.as(FunctionCallExprSyntax.self) {
                                 let functionName = functionCall.calledExpression.as(MemberAccessExprSyntax.self)?.name.text
-                                return functionName != "snapshotTests" && functionName != "tests"
+                                return functionName != "snapshotTests" && functionName != "tests" && functionName != "testSupport"
                             }
                             return true
                         }

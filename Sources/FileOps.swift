@@ -22,11 +22,9 @@ func createInterfaceModuleDirectoryWithSource(_ directory: String, moduleName: S
                         let interfacePath = firstLevelPath
                         let interfaceFolder = (interfacePath as NSString).appendingPathComponent("\(moduleName)Interface")
                         let sourcesFolder = (interfaceFolder as NSString).appendingPathComponent("Sources")
-                        let testSupportFolder = (interfaceFolder as NSString).appendingPathComponent("TestSupport")
-                        
+
                         try createDirectoryIfNeeded(at: interfaceFolder)
                         try createDirectoryIfNeeded(at: sourcesFolder)
-                        try createDirectoryIfNeeded(at: testSupportFolder)
                         
                         let filePath = (sourcesFolder as NSString).appendingPathComponent("\(moduleName)Interface.swift")
                         try createFile(at: filePath, withContent: fileContent)
