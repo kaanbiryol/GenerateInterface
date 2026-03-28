@@ -19,6 +19,13 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
                 .product(name: "SourceKittenFramework", package: "SourceKitten"),
+            ]),
+        .testTarget(
+            name: "GenerateInterfaceTests",
+            dependencies: [
+                "generateInterface",
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
             ])
     ]
 )
