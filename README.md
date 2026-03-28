@@ -1,63 +1,42 @@
 # GenerateInterface
 
-A command-line tool that automatically generates Swift interface modules from compiled module interfaces using SourceKit and SwiftSyntax.
+Auto-generate Swift interface modules from compiled modules using SourceKit and SwiftSyntax - eliminating unnecessary recompilation in modular iOS codebases.
 
-## The Problem
+## Why?
 
-In large modular iOS codebases, modules often depend on each other's full implementations even when they only need access to the public API. This means changing an implementation detail in one module can trigger recompilation of all dependent modules, slowing down builds significantly.
+In large modular iOS projects, changing an implementation detail in one module triggers recompilation of every dependent module. **Interface modules** break this chain by exposing only the public API surface - dependents import the lightweight interface instead of the full implementation.
 
-**Interface modules** solve this by extracting a module's public API surface into a separate, lightweight module. Dependents import the interface module instead of the full implementation, so implementation changes no longer cascade rebuilds across the dependency graph.
+Maintaining these by hand is tedious and error-prone. This tool automates the entire process.
 
-Creating and maintaining these interface modules by hand is tedious and error-prone. This tool automates the process.
+## What it does
 
-## What It Does
-
-Given a module name and its compiler arguments, the tool:
-
-1. **Extracts the module interface** via SourceKit (the same engine Xcode uses for code completion and indexing)
-2. **Rewrites the interface** using SwiftSyntax - strips private/internal imports (prefixed with `_`), removes `some`/`any` type erasure wrappers, simplifies member type syntax, filters out builder classes, and merges duplicate extensions
-3. **Replaces declarations** with their original source versions when available (preserving doc comments, attributes, and formatting)
-4. **Creates the interface module directory** with a `Sources/` folder
-5. **Rewrites import statements** across the codebase (`import Module` -> `import ModuleInterface`)
-6. **Updates Project.swift** to register the new interface module with the correct dependencies (Tuist-specific)
+- Extracts the public module interface via SourceKit (`source.request.editor.open.interface`)
+- Rewrites the interface with SwiftSyntax - strips internal imports, removes `some`/`any` wrappers, simplifies types, filters builder classes, merges duplicate extensions
+- Replaces declarations with original source versions when available (preserving doc comments, attributes, formatting)
+- Creates the interface module directory with `Sources/`
+- Rewrites `import Module` to `import ModuleInterface` across the codebase
+- Updates `Project.swift` to register the new module with correct dependencies (Tuist-specific)
 
 ## Requirements
 
-- macOS 13+
-- Xcode (for SourceKit)
-- Swift 5.10+
+- macOS 13+, Swift 5.10+, Xcode (for SourceKit)
 
-## Installation
+## Quick start
 
 ```bash
-# Build from source
 swift build -c release
-
-# Or use the Makefile (builds for arm64)
-make build
+# or: make build
 ```
 
-## Try it out
-
-A sample project is included to test the tool without needing a real Xcode workspace or Tuist:
+A sample project is included:
 
 ```bash
 cd SampleProject
-
-# Preview the generated interface (dry run, no files written)
-./run-sample.sh
-
-# Run the full pipeline (creates interface module, rewrites Project.swift and imports)
-./run-sample.sh --write
+./run-sample.sh              # dry run - preview generated interface
+./run-sample.sh --write      # full pipeline - creates interface module, rewrites imports
 ```
 
-The script builds the tool, compiles a sample Swift module via SPM, extracts compiler arguments, and runs the tool. Use `--write` to execute the full pipeline, or omit it to preview with `--print-only`.
-
-After running with `--write`, you'll see:
-- `libraries/business/UserProfileInterface/` created with `Sources/`
-- `Project.swift` updated with the new interface module declaration
-
-To reset the sample project after a full run:
+Reset after a full run:
 
 ```bash
 git checkout SampleProject/Project.swift
@@ -69,7 +48,6 @@ rm -rf SampleProject/libraries/business/UserProfileInterface
 ### Direct invocation
 
 ```bash
-# SourceKit requires the Xcode toolchain frameworks in the dynamic library path
 export DYLD_FRAMEWORK_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
 
 ./generateInterface \
@@ -80,88 +58,57 @@ export DYLD_FRAMEWORK_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolcha
 ```
 
 **Arguments:**
-- `projectSwiftPath` - path to the Tuist `Project.swift` file
-- `moduleName` - name of the module to generate an interface for
+- `projectSwiftPath` - Tuist `Project.swift` file
+- `moduleName` - module to generate an interface for
 - `modulesPath` - root directory containing all modules
-- `compilerArgsPath` - path to a file containing Swift compiler arguments (one per line)
+- `compilerArgsPath` - file with Swift compiler arguments (one per line)
 
 **Flags:**
-- `--print-only` - preview the generated interface without writing any files
+- `--print-only` - preview generated interface without writing files
 
 ### Getting compiler arguments
 
-The tool needs Swift compiler arguments to invoke SourceKit. You can extract these from Xcode's build settings:
+Extract from Xcode build settings:
 
 ```bash
-# Dump build settings as JSON
 xcodebuild -workspace App.xcworkspace \
-    -scheme "MyModule" \
-    -arch arm64 \
-    -sdk iphonesimulator \
-    -configuration "Debug" \
+    -scheme "MyModule" -arch arm64 \
+    -sdk iphonesimulator -configuration "Debug" \
     -showBuildSettingsForIndex -json 2>/dev/null > build_settings.json
 ```
 
-The JSON output is keyed by module name, then by source file path. Each entry contains a `swiftASTCommandArguments` array. Extract those arguments, remove `-module-name` and the module name itself, and write one argument per line to a file:
+Parse `swiftASTCommandArguments`, removing `-module-name` and the module name:
 
 ```bash
-# Using jq as an example (the Ruby wrapper does this automatically)
-jq -r '
-  .MyModule | to_entries[0].value.swiftASTCommandArguments[]
-' build_settings.json \
+jq -r '.MyModule | to_entries[0].value.swiftASTCommandArguments[]' build_settings.json \
   | grep -v -e '-module-name' -e '^MyModule$' \
   > compiler-args.txt
 ```
 
-### Verifying it works
+### Ruby wrapper
 
-Use `--print-only` to preview the generated interface without writing any files:
-
-```bash
-./generateInterface \
-    "/path/to/Project.swift" \
-    "MyModule" \
-    "/path/to/modules" \
-    "/path/to/compiler-args.txt" \
-    --print-only
-```
-
-This prints the rewritten module interface to stdout so you can inspect it before committing to file changes.
-
-### With the Ruby wrapper
-
-The included `generateInterface.rb` script automates compiler argument extraction from Xcode build settings:
+The included `generateInterface.rb` automates compiler argument extraction:
 
 ```bash
 ruby generateInterface.rb MyModule
 ruby generateInterface.rb MyModule --print-only
 ```
 
-The wrapper:
-1. Runs `xcodebuild -showBuildSettingsForIndex` for the module's scheme
-2. Extracts Swift compiler arguments from the build settings
-3. Caches build settings to avoid repeated Xcode calls
-4. Invokes the Swift tool with the extracted arguments
+The wrapper runs `xcodebuild -showBuildSettingsForIndex`, extracts and caches compiler arguments, then invokes the tool.
 
-Configure the wrapper by setting these environment variables:
-- `WORKSPACE` - Xcode workspace name (default: `App.xcworkspace`)
-- `TOOL_PATH` - path to the built `generateInterface` binary (default: `tools/generateInterface`)
-- `MODULES_PATH` - path to the modules directory (default: `libraries`)
+Environment variables: `WORKSPACE` (default: `App.xcworkspace`), `TOOL_PATH` (default: `tools/generateInterface`), `MODULES_PATH` (default: `libraries`).
 
-## How It Works
+## How it works
 
-The core pipeline uses two Apple frameworks:
-
-- **SourceKittenFramework** - sends a `source.request.editor.open.interface` request to Xcode's SourceKit daemon, which returns the full public interface of a compiled module (the same text you see in Xcode's "Generated Interface" view)
-- **SwiftSyntax** - parses and rewrites the generated interface at the AST level, ensuring transformations are structurally correct rather than fragile string replacements
-
-The `ProjectRewriter` manipulates Tuist's `Module(...)` declarations via SwiftSyntax to add the new interface module definition, update dependency lists, and wire up test support targets.
+- **SourceKit** returns the full public interface of a compiled module (same as Xcode's "Generated Interface" view)
+- **SwiftSyntax** parses and rewrites the interface at the AST level - structurally correct transformations, not string replacements
+- **ProjectRewriter** manipulates Tuist `Module(...)` declarations to register the new interface module and update dependencies
 
 ## Limitations
 
-- The `Project.swift` rewriting is specific to a Tuist project structure using `Module(...)` declarations with `kind`, `moduleDependencies`, and `features` parameters. You may need to adapt `ProjectRewriter.swift` for your project's conventions.
-- The Ruby wrapper assumes an Xcode workspace-based project. Adjust if using a different build system.
-- Builder class filtering (`classes inheriting from Builder are excluded`) is project-specific behavior.
+- `Project.swift` rewriting is specific to Tuist projects using `Module(...)` declarations with `kind`, `moduleDependencies`, and `features` parameters - adapt `ProjectRewriter.swift` for other conventions
+- Ruby wrapper assumes an Xcode workspace-based project
+- Builder class filtering is project-specific behavior
 
 ## License
 
